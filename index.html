@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REQUIEM — Ashes of the Vale · 3D</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="game"></div>
+    <div id="vignette"></div>
+    <div id="introScene" aria-live="polite">
+        <div id="introCopy">
+            <div id="introKicker">A VIGÍLIA TERMINOU</div>
+            <div id="introTitle">O CAVALEIRO DO LUTO</div>
+            <div id="introLine">Agora, o vale exige sangue.</div>
+        </div><button id="skipIntro">PULAR APRESENTAÇÃO</button>
+    </div>
+    <div id="hud">
+        <div id="top">
+            <div class="name">VIGOR · <span id="hpText">120 / 120</span></div>
+            <div class="meter" id="hp"><i></i></div>
+            <div class="name">RESISTÊNCIA · <span id="stText">100 / 100</span></div>
+            <div class="meter" id="stamina"><i></i></div>
+        </div>
+        <div id="bossHud">
+            <div id="bossName">CAVALEIRO DO LUTO</div>
+            <div id="bossBar"><i></i></div>
+        </div>
+        <div id="centerMark"></div>
+        <div id="toast"></div>
+        <div id="hint">WASD mover · Shift correr · Clique atacar · Botão direito golpe forte · Espaço esquivar · Esc
+            pausar</div>
+        <div id="objective">Quebre o silêncio do cavaleiro e atravesse o vale.</div>
+    </div>
+    <div id="mobile">
+        <div class="stick" id="stick" aria-label="Mover">
+            <div class="knob" id="knob"></div>
+        </div>
+        <div class="actions"><button data-action="attack">ATACAR</button><button
+                data-action="heavy">FORTE</button><button data-action="dodge">ESQUIVA</button><button
+                data-action="lock">ALVO</button></div>
+    </div>
+    <div id="menu">
+        <div class="panel">
+            <div class="kicker">Uma jornada entre ruínas · versão 3D</div>
+            <h1>REQUIEM</h1>
+            <div class="subtitle">ASHES OF THE VALE</div>
+            <div class="rule"></div>
+            <p class="blurb">Um vale esquecido, uma chama quase extinta e um cavaleiro preso à sua última vigília.
+                Atravesse as ruínas, observe os sinais do inimigo e sobreviva ao aço. Esta fantasia sombria em terceira
+                pessoa preserva o protótipo original em outro arquivo.</p>
+            <div class="buttons"><button class="btn" id="start">Iniciar jornada</button><button class="btn secondary"
+                    id="controlsBtn">Controles</button></div>
+            <div class="controls">
+                <div>Mover <kbd>W A S D</kbd></div>
+                <div>Correr <kbd>SHIFT</kbd></div>
+                <div>Atacar / forte <kbd>CLIQUE / DIR.</kbd></div>
+                <div>Esquivar <kbd>ESPAÇO</kbd></div>
+                <div>Travar alvo <kbd>TAB</kbd></div>
+                <div>Pausar <kbd>ESC</kbd></div>
+                <div>Girar câmera <kbd>MOUSE</kbd></div>
+                <div>Sair do mouse <kbd>ESC</kbd></div>
+            </div>
+            <p class="blurb" style="font-size:11px">A cena 3D carrega Three.js pela internet na primeira abertura.
+                Também pode ser servida localmente com Python: <code>python -m http.server 8000</code> na pasta do
+                arquivo.</p>
+        </div>
+    </div>
+    <div id="pause">
+        <div class="panel">
+            <div class="kicker">O mundo aguarda</div>
+            <h2 style="font-weight:normal;letter-spacing:4px">PAUSADO</h2>
+            <p class="blurb">Respire. Leia os movimentos.</p>
+            <div class="buttons"><button class="btn" id="resume">Continuar</button><button class="btn secondary"
+                    id="backMenu">Menu principal</button></div>
+        </div>
+    </div>
+    <div id="end">
+        <div class="panel">
+            <div class="kicker">A cinza encontra o silêncio</div>
+            <h2 id="endTitle" style="font-weight:normal;letter-spacing:4px">O CAVALEIRO CAIU</h2>
+            <p class="blurb">A vigília terminou. Por enquanto, o vale guarda o caminho adiante.</p>
+            <div class="buttons"><button class="btn" id="restart">Jogar novamente</button><button class="btn secondary"
+                    id="endMenu">Menu principal</button></div>
+        </div>
+    </div>
+    <div id="error">
+        <div class="panel">
+            <div class="kicker">Falha ao carregar o motor 3D</div>
+            <h2 style="font-weight:normal">Three.js indisponível</h2>
+            <p class="blurb" id="errorText"></p>
+            <p class="blurb">Verifique sua conexão e atualize a página. O arquivo original continua intacto.</p>
+        </div>
+    </div>
+    <div id="controlsPanel">
+        <div class="panel">
+            <div class="kicker">Controles de combate</div>
+            <h2 style="font-weight:normal;letter-spacing:3px">SOBREVIVA ÀS CINZAS</h2>
+            <div class="controls">
+                <div>Movimento <kbd>W A S D</kbd></div>
+                <div>Correr <kbd>SHIFT</kbd></div>
+                <div>Ataque leve <kbd>CLIQUE ESQUERDO</kbd></div>
+                <div>Ataque pesado <kbd>CLIQUE DIREITO</kbd></div>
+                <div>Esquiva com invulnerabilidade <kbd>ESPAÇO</kbd></div>
+                <div>Travar alvo <kbd>TAB</kbd></div>
+                <div>Usar frasco <kbd>F</kbd></div>
+                <div>Girar a câmera <kbd>MOUSE</kbd></div>
+            </div>
+            <div class="buttons"><button class="btn" id="controlsClose">Voltar</button></div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
