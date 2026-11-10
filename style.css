@@ -10,6 +10,7 @@ canvas{display:block;width:100%;height:100%;outline:none}
 #hud{position:fixed;inset:0;z-index:2;pointer-events:none;display:none}
 #top{position:absolute;top:20px;left:22px;width:min(300px,55vw)}
 .name{font:11px Arial,sans-serif;letter-spacing:3px;color:#b9a17c;margin-bottom:8px}
+.resourceCount{margin:8px 0 0;font-size:10px;letter-spacing:2px}
 .meter{height:9px;background:#171819;border:1px solid #756348;margin:6px 0;overflow:hidden;box-shadow:0 2px 12px #0008}
 .meter i{height:100%;display:block;width:100%;transition:width .12s}
 #hp i{background:linear-gradient(90deg,#842a31,#e75b4f);box-shadow:0 0 12px #eb594b99}
@@ -17,7 +18,7 @@ canvas{display:block;width:100%;height:100%;outline:none}
 #bossHud{position:absolute;top:25px;left:50%;transform:translateX(-50%);width:min(440px,60vw);text-align:center;display:none}
 #bossName{color:#c9bba5;font-size:15px;letter-spacing:3px;margin-bottom:6px}
 #bossBar{height:10px;background:#130f10;border:1px solid #60413b}
-#bossBar i{height:100%;display:block;background:linear-gradient(90deg,#511b20,#a34035,#ce7951);width:100%;box-shadow:0 0 12px #9f403688}
+#bossBar i{height:100%;display:block;background:linear-gradient(90deg,#681c17,#bb3b25,#e79b45);width:100%;box-shadow:0 0 12px #d3482788}
 #hint{position:absolute;bottom:25px;left:50%;transform:translateX(-50%);padding:10px 15px;background:#090a0be8;border:1px solid #78644777;color:#c9b99b;font:12px Arial,sans-serif;letter-spacing:1px;white-space:nowrap;max-width:92vw;text-align:center}
 #toast{position:absolute;top:23%;left:50%;transform:translateX(-50%);font:bold 13px Arial,sans-serif;letter-spacing:3px;color:#d7bd93;text-shadow:0 2px 8px #000,0 0 18px #9e4d3288;opacity:0;transition:opacity .15s;text-align:center}
 /* Sobreposição e animação da apresentação do chefe. */
@@ -33,13 +34,17 @@ canvas{display:block;width:100%;height:100%;outline:none}
 #skipIntro{position:absolute;right:24px;bottom:11vh;pointer-events:auto;background:#090a0bcc;border:1px solid #b89a6877;color:#e3d2b2;padding:10px 14px;font:10px Arial,sans-serif;letter-spacing:2px;cursor:pointer}
 #centerMark{position:absolute;left:50%;top:50%;width:7px;height:7px;border:1px solid #e8dfcb;border-radius:50%;transform:translate(-50%,-50%);opacity:.7}
 #objective{position:absolute;right:24px;bottom:24px;max-width:240px;text-align:right;font:12px/1.5 Arial,sans-serif;color:#c9c1b2}
+#questTracker{position:absolute;top:82px;right:24px;width:min(270px,38vw);padding:11px 14px;border:1px solid #8e775288;background:#090a0be0;font:11px/1.5 Arial,sans-serif;color:#d8c8a9;display:none}
+#questTracker strong,#questTracker span{display:block}
+#questTracker strong{font-size:10px;letter-spacing:2px;color:#c8ae77}
+#interactionPrompt{position:absolute;bottom:78px;left:50%;transform:translateX(-50%);padding:8px 13px;background:#090a0be8;border:1px solid #78644777;color:#e3d2b2;font:12px Arial,sans-serif;letter-spacing:1px;display:none}
 /* Painéis de menu e botões para telas sensíveis ao toque. */
 #mobile{display:none;position:fixed;z-index:4;inset:0;pointer-events:none;font:11px Arial,sans-serif}
 .stick{position:absolute;left:22px;bottom:26px;width:118px;height:118px;border-radius:50%;border:1px solid #d5bd8777;background:#080a0b66;pointer-events:auto;touch-action:none}
 .knob{position:absolute;left:34px;top:34px;width:48px;height:48px;border-radius:50%;border:1px solid #ead8aa;background:#d4bd8255}
-.actions{position:absolute;right:16px;bottom:24px;display:grid;grid-template-columns:repeat(2,66px);gap:8px;pointer-events:auto}
+.actions{position:absolute;right:16px;bottom:24px;display:grid;grid-template-columns:repeat(3,62px);gap:8px;pointer-events:auto}
 .actions button{height:52px;border:1px solid #c8ae77;background:#111412dd;color:#e7d6b1;font:bold 10px Arial,sans-serif;touch-action:none}
-#menu,#pause,#end,#error{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:18px;background:radial-gradient(ellipse at center,#101416c9,#020304f5)}
+#menu,#pause,#end,#error,#journal,#dialogue{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:18px;background:radial-gradient(ellipse at center,#101416c9,#020304f5)}
 #controlsPanel{position:fixed;inset:0;z-index:7;display:none;align-items:center;justify-content:center;padding:18px;background:#020304eF}
 .panel{width:min(620px,96vw);max-height:92vh;overflow:auto;padding:clamp(22px,4vw,40px);border:1px solid #8e775288;background:linear-gradient(145deg,#191b1af5,#080a0bf8);box-shadow:0 20px 100px #000}
 .kicker{color:#c8ae77;font:10px Arial,sans-serif;letter-spacing:5px;text-transform:uppercase}
@@ -61,7 +66,16 @@ kbd{color:#e4cf9e}
 #pause,#end,#error{display:none}
 #pause{z-index:8}
 #controlsPanel{z-index:9}
+#journal,#dialogue{display:none;z-index:10}
 #error .panel{border-color:#b94543}
 #errorText{color:#efb9ae;overflow-wrap:anywhere}
-/* Ajustes de posição para telas estreitas. */
-@media(max-width:700px){#mobile{display:block}#hint{bottom:165px;font-size:10px}#objective{display:none}#bossHud{top:12px}#top{top:12px;left:12px;width:190px}.controls{grid-template-columns:1fr}}
+/* O tipo de controle detectado seleciona o HUD, independente da largura da tela. */
+body.device-mobile #mobile{display:block}
+body.device-mobile #hint,body.device-mobile #objective{display:none}
+body.device-mobile #bossHud{top:132px;width:min(440px,calc(100vw - 24px))}
+body.device-mobile #questTracker{top:164px;right:12px;width:min(230px,48vw);font-size:10px}
+body.device-mobile #interactionPrompt{bottom:196px;max-width:70vw;text-align:center}
+body.device-mobile #top{top:12px;left:12px;width:190px}
+body.device-mobile .controls{grid-template-columns:1fr}
+body.device-desktop #mobile{display:none!important}
+body.device-desktop #centerMark,body.device-desktop #objective{display:none!important}

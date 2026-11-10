@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Requiem – Espada Estilo Kojima na Cintura</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #121212;
+  --fg: #e9dfc8;
+  --ac: #3b82f6;
+  --ln: #2a2a2a;
+  box-sizing: border-box;
+}
+* { box-sizing: border-box; user-select: none; }
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: #181818;
+  color: #eee;
+  font-family: 'Spectral', system-ui, -apple-system, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #222;
+  border-bottom: 1px solid #333;
+  z-index: 10;
+}
+header h1 { margin: 0; font-size: 1.1rem; font-weight: 400; color: #ddd; }
+header .title-center { font-size: 1.2rem; font-weight: 500; color: #60a5fa; }
+header .top-btns { display: flex; gap: 8px; }
+header button {
+  background: #3a3a3d;
+  color: #fff;
+  border: 1px solid #555;
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .85rem;
+  font-family: inherit;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+header button:hover { background: #4a4a4d; border-color: #60a5fa; }
+
+#stage { flex: 1; min-height: 0; touch-action: none; position: relative; }
+#stage canvas { display: block; width: 100%; height: 100%; }
+
+#actionBanner {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 20, 0.85);
+  border: 1px solid #3b82f6;
+  padding: 8px 22px;
+  border-radius: 20px;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 5;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+}
+#actionBanner.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(6px);
+}
+
+footer {
+  background: #222;
+  border-top: 1px solid #333;
+  padding: 12px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  z-index: 10;
+}
+.combat-btn {
+  background: #1e293b;
+  color: var(--fg);
+  border: 1px solid #3b82f6;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: bold;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+.combat-btn:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #fff;
+  transform: translateY(-2px);
+}
+.combat-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Chosen Palette: Dark Medieval Gold & Blue -->
+<!-- Application Structure Plan: Interactive 3D Canvas viewer with combat controls and state-driven animations for equipping, unequipping, and attacking with the Kojima Blue Gem sword. -->
+<!-- Visualization & Content Choices: Three.js Canvas WebGL for 3D character and custom sword modeling without SVG or Mermaid JS. -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+<header>
+  <h1>Requiem: Espada Estilo Kojima (Azul)</h1>
+  <div class="title-center">Cintura (Lateral) | Mão (Frente)</div>
+  <div class="top-btns">
+    <button id="zoom">Ampliar</button>
+    <button id="spin" aria-pressed="true">Girar sozinho</button>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="actionBanner">Espada com gema azul presa à cintura. Pronta para saque!</div>
+</main>
+
+<footer>
+  <button class="combat-btn" id="equipSwordBtn">🗡️ Sacar Espada</button>
+  <button class="combat-btn" id="unequipSwordBtn" disabled>🛡️ Guardar Espada</button>
+  <button class="combat-btn" id="equipShieldBtn">🛡️ Sacar Escudo</button>
+  <button class="combat-btn" id="unequipShieldBtn" disabled>❌ Guardar Escudo</button>
+  <button class="combat-btn" id="lightAtkBtn" disabled>🎯 Estocada Azul</button>
+  <button class="combat-btn" id="heavyAtkBtn" disabled>💥 Corte Cristalino</button>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(()=>{
+const T = THREE, $ = id => document.getElementById(id);
+const actionBanner = $('actionBanner');
+
+function showBanner(text, duration = 1800) {
+  actionBanner.textContent = text;
+  actionBanner.classList.add('active');
+  setTimeout(() => actionBanner.classList.remove('active'), duration);
+}
+
+const stage = $('stage'), R = new T.WebGLRenderer({antialias: true});
+R.setPixelRatio(Math.min(devicePixelRatio, 2));
+R.shadowMap.enabled = true;
+R.shadowMap.type = T.PCFSoftShadowMap;
+stage.appendChild(R.domElement);
+
+const S = new T.Scene(), C = new T.PerspectiveCamera(40, 1, 0.1, 200);
+
+S.background = new T.Color(0xd2b57d);
+S.fog = new T.Fog(0xd2b57d, 15, 45);
+
+const hemiLight = new T.HemisphereLight(0xfff0d0, 0x504030, 0.85);
+S.add(hemiLight);
+
+const sun = new T.DirectionalLight(0xfff5e0, 1.4);
+sun.position.set(6, 12, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.width = 2048;
+sun.shadow.mapSize.height = 2048;
+S.add(sun);
+
+const ambient = new T.AmbientLight(0xd0b080, 0.3);
+S.add(ambient);
+
+const floorGeo = new T.CircleGeometry(4, 64);
+const floorMat = new T.MeshStandardMaterial({color: 0xcbb079, roughness: 0.8, metalness: 0.1});
+const floor = new T.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.receiveShadow = true;
+S.add(floor);
+
+const ringGeo = new T.RingGeometry(3.8, 4.0, 64);
+const ringMat = new T.MeshStandardMaterial({color: 0xa88d58, roughness: 0.9});
+const ring = new T.Mesh(ringGeo, ringMat);
+ring.rotation.x = -Math.PI / 2;
+ring.position.y = 0.001;
+S.add(ring);
+
+const M = (c,m=.4,r=.5,e=0,f=false)=>new T.MeshStandardMaterial({color:c,metalness:m,roughness:r,flatShading:f,emissive:e});
+const P = (p,x=0,y=0,z=0)=>{const g=new T.Group();g.position.set(x,y,z);p.add(g);return g};
+const B = (p,w,h,d,m,x=0,y=0,z=0)=>{const o=new T.Mesh(new T.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;p.add(o);return o};
+const CY = (p,rt,rb,h,m,x=0,y=0,z=0,sx=1,sz=1,sg=16)=>{const o=new T.Mesh(new T.CylinderGeometry(rt,rb,h,sg),m);o.position.set(x,y,z);o.scale.set(sx,1,sz);o.castShadow=true;o.receiveShadow=true;p.add(o);return o};
+const SP = (p,r,m,x=0,y=0,z=0,sx=1,sy=1,sz=1)=>{const o=new T.Mesh(new T.SphereGeometry(r,12,10),m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.castShadow=true;o.receiveShadow=true;p.add(o);return o};
+
+/* ---------- Cavaleiro ---------- */
+const knight = new T.Group();
+S.add(knight);
+
+const steel = M(0x8a929e,.7,.3), darkSteel = M(0x2d3138,.6,.4), tunicDark = M(0x1a1c20,.1,.85), leather = M(0x5a3b22,0,.85), capeCloth = M(0x2e1e18,0,.9), bladeMat = M(0xd4e2ed,.95,.15), blueGem = M(0x2563eb, 0.3, 0.2, 0x1d4ed8), blueMosaic = M(0x1d4ed8, 0.4, 0.3, 0x1e40af), eyeMat = M(0x0a0a0a,0,.9,0,false);
+
+const hips = P(knight,0,.96,0);
+B(hips,.38,.24,.26,darkSteel);
+
+for(const s of [-1, 1]){
+  const fauld = B(hips, .16, .22, .04, steel, s*.14, -.06, .13);
+  fauld.rotation.x = 0.2;
+  fauld.rotation.y = s*0.1;
+}
+
+const belt = CY(hips, .205, .205, .08, leather, 0, .08, 0, 1, 1, 16);
+const torso = P(hips,0,.1,0);
+CY(torso,.24,.18,.56,darkSteel,0,.3,0,1.25,.85);
+
+const breastplate = B(torso,.38,.44,.22,darkSteel,0,.32,.03);
+const breastplatePlate = B(torso,.32,.36,.06,steel,0,.34,.14);
+breastplatePlate.rotation.x = -0.08;
+
+const head = P(torso,0,.61,0);
+CY(head,.135,.135,.14,steel,0,.06,0,1,1,16);
+const helmDome = new T.Mesh(new T.SphereGeometry(.135,16,12,0,Math.PI*2,0,Math.PI/2),steel);
+helmDome.position.set(0,.13,0);
+helmDome.scale.set(1.02,0.88,1.02);
+head.add(helmDome);
+
+const eyeLeftGroup = P(head, -.038, .09, .122);
+eyeLeftGroup.rotation.y = -.12;
+B(eyeLeftGroup, .014, .06, .03, eyeMat, 0, 0, 0);
+B(eyeLeftGroup, .035, .014, .03, eyeMat, -.012, .023, 0);
+
+const eyeRightGroup = P(head, .038, .09, .122);
+eyeRightGroup.rotation.y = .12;
+B(eyeRightGroup, .014, .06, .03, eyeMat, 0, 0, 0);
+B(eyeRightGroup, .035, .014, .03, eyeMat, .012, .023, 0);
+
+for(const s of[-1,1]){
+  const cv=new T.CatmullRomCurve3([
+    new T.Vector3(s*.06, .22, 0),
+    new T.Vector3(s*.10, .30, .01),
+    new T.Vector3(s*.15, .39, -.01),
+    new T.Vector3(s*.09, .47, -.02)
+  ]);
+  const antennaMesh = new T.Mesh(new T.TubeGeometry(cv, 14, .009, 8, false), steel);
+  antennaMesh.castShadow = true;
+  head.add(antennaMesh);
+}
+
+const cape = P(torso,0,.54,-.12);
+const capeMainCV = new T.CatmullRomCurve3([
+  new T.Vector3(0, 0, 0),
+  new T.Vector3(0, -.35, -.08),
+  new T.Vector3(0, -.75, -.18),
+  new T.Vector3(0, -1.0, -.24)
+]);
+const capeMesh = new T.Mesh(new T.TubeGeometry(capeMainCV, 16, .28, 12, false), capeCloth);
+capeMesh.scale.set(1.4, 1, .15);
+capeMesh.castShadow = true;
+cape.add(capeMesh);
+
+for(const s of [-1, 1]){
+  const foldCV = new T.CatmullRomCurve3([
+    new T.Vector3(s*.12, -.05, -.02),
+    new T.Vector3(s*.22, -.45, -.10),
+    new T.Vector3(s*.28, -.95, -.22)
+  ]);
+  const foldMesh = new T.Mesh(new T.TubeGeometry(foldCV, 12, .08, 8, false), capeCloth);
+  foldMesh.scale.set(1, 1, .4);
+  foldMesh.castShadow = true;
+  cape.add(foldMesh);
+}
+
+function arm(s){
+  const sh = P(torso, s*.27, .52, 0);
+  CY(sh,.12,.09,.12,steel,s*.02,.06,0,1.3,1.1);
+  CY(sh,.10,.085,.10,darkSteel,s*.03,.01,0,1.2,1);
+  B(sh,.11,.24,.11,tunicDark,0,-.17,0);
+  const el = P(sh,0,-.31,0);
+  B(el,.12,.12,.12,steel);
+  B(el,.12,.26,.12,steel,0,-.16,0);
+  const h = P(el,0,-.3,0);
+  B(h,.13,.13,.13,darkSteel);
+  B(h,.14,.05,.14,steel,0,.04,0);
+  return [sh,el,h];
+}
+
+function leg(x){
+  const h = P(hips,x,-.05,0);
+  B(h,.18,.46,.19,tunicDark,0,-.23,0);
+  const thighGuard = B(h,.16,.32,.06,steel,0,-.2,.1);
+  thighGuard.rotation.x = -0.05;
+  const k = P(h,0,-.45,0);
+  B(k,.16,.14,.12,steel,0,0,.06);
+  SP(k,.07,darkSteel,0,0,.11);
+  B(k,.15,.46,.15,steel,0,-.23,0); 
+  B(k,.06,.42,.04,darkSteel,0,-.23,.08);
+  const f = P(k,0,-.45,0);
+  B(f,.12,.09,.3,leather,0,-.03,.07);
+  B(f,.13,.05,.22,steel,0,-.01,.08);
+  return [h,k];
+}
+const [shR,elR,hnR]=arm(1),[shL,elL]=arm(-1); leg(-.11); leg(.11);
+
+function createKojimaBlueSword(){
+    const sGroup = new T.Group();
+
+    // Cabo (Hilt) - Posicionado na parte superior do punho da espada
+    CY(sGroup, .022, .022, .28, darkSteel, 0, .14, 0, 1, 1, 32);
+    for(let r=0; r<4; r++){
+        CY(sGroup, .024, .024, .015, leather, 0, .06 + (r*0.05), 0, 1, 1, 24);
+    }
+
+    // Pomo circular estilo gema da foto (no topo do cabo)
+    const pommelGroup = P(sGroup, 0, .28, 0);
+    const pommelRing = new T.Mesh(new T.TorusGeometry(.045, .012, 16, 32), steel);
+    pommelRing.rotation.x = Math.PI / 2;
+    pommelGroup.add(pommelRing);
+    
+    // Gema azul brilhante no centro do pomo
+    SP(pommelGroup, .032, blueGem, 0, 0, 0, 1, 0.4, 1);
+
+    // Guarda - Larga, curva e arredondada (logo abaixo do cabo)
+    const guardGroup = P(sGroup, 0, .02, 0);
+    const mainGuardBar = CY(guardGroup, .038, .038, .48, steel, 0, 0, 0, 1.2, .6, 32);
+    mainGuardBar.rotation.z = Math.PI / 2;
+    
+    for(const s of [-1, 1]){
+        const wing = SP(guardGroup, .055, steel, s * 0.22, 0.02, 0, 1.3, 0.7, 0.8);
+        guardGroup.add(wing);
+    }
+
+    // Lâmina principal - Ampla e suavemente bevolada (estendendo-se para baixo da guarda)
+    const bladeBody = CY(sGroup, .068, .058, 0.90, bladeMat, 0, -0.48, 0, 1, 0.32, 32);
+    sGroup.add(bladeBody);
+
+    // Mosaico triangular azul na base da lâmina
+    const mosaicGroup = P(sGroup, 0, -0.26, 0);
+    CY(mosaicGroup, .062, .035, 0.32, blueMosaic, 0, 0, 0, 0.9, 0.34, 24);
+    for(let i=0; i<3; i++){
+        SP(mosaicGroup, .018 - (i*0.003), blueGem, 0, 0.08 - (i*0.07), .012, 1, 1, 0.5);
+    }
+
+    // Topo reto e arredondado (Sem ponta pontiaguda)
+    const bluntTip = CY(sGroup, .058, .054, 0.08, bladeMat, 0, -0.93, 0, 1, 0.32, 32);
+    const roundedEdge = new T.Mesh(new T.TorusGeometry(.055, .01, 12, 32), bladeMat);
+    roundedEdge.position.set(0, -0.97, 0);
+    roundedEdge.rotation.x = Math.PI / 2;
+    roundedEdge.scale.set(1, 0.32, 1);
+    sGroup.add(bluntTip);
+    sGroup.add(roundedEdge);
+
+    return sGroup;
+}
+
+function createShieldModel(){
+    const sGroup = new T.Group();
+    const shieldWood = CY(sGroup, .38, .38, .04, leather, 0, 0, 0, 1, 1, 32);
+    shieldWood.rotation.x = Math.PI/2;
+    const shieldBorder = new T.Mesh(new T.TorusGeometry(.38,.025,10,32),steel);
+    sGroup.add(shieldBorder);
+    SP(sGroup, .09, steel, 0, 0, .025, 1, 1, 1);
+    return sGroup;
+}
+
+// 1. Espada na cintura lateral
+const waistSword = createKojimaBlueSword();
+waistSword.position.set(0.24, -0.05, 0.05);
+waistSword.rotation.x = -Math.PI / 12;
+waistSword.rotation.y = -Math.PI / 2;
+waistSword.rotation.z = -Math.PI / 2.8;
+hips.add(waistSword);
+
+// 2. Espada na mão: Apontando para frente e virada para o outro lado (invertida 180° no eixo Y/Z)
+const handSword = createKojimaBlueSword();
+handSword.position.set(0, -0.1, 0.15);
+handSword.rotation.x = Math.PI / 2;
+handSword.rotation.y = Math.PI; // Virada para o outro lado
+handSword.rotation.z = Math.PI;
+hnR.add(handSword);
+handSword.visible = false;
+
+const backShield = createShieldModel();
+backShield.position.set(0, 0.35, -0.22);
+backShield.rotation.y = Math.PI;
+torso.add(backShield);
+
+const handShield = createShieldModel();
+handShield.position.set(-0.14, -0.1, 0.06);
+handShield.rotation.y = Math.PI / 2;
+elL.add(handShield);
+handShield.visible = false;
+
+shR.rotation.set(-0.2, 0, 0.2);
+elR.rotation.x = -0.3;
+shL.rotation.set(-0.3, 0, -0.2);
+elL.rotation.x = -0.6;
+
+let charState = 'IDLE';
+let animStartTime = 0;
+let animType = '';
+
+$('equipSwordBtn').onclick = () => {
+  if (charState !== 'IDLE') return;
+  charState = 'ANIMATING';
+  animType = 'EQUIP_SWORD';
+  animStartTime = performance.now();
+  showBanner('🗡️ Sacando a espada azul Kojima!');
+};
+
+$('unequipSwordBtn').onclick = () => {
+  if (charState !== 'IDLE') return;
+  charState = 'ANIMATING';
+  animType = 'UNEQUIP_SWORD';
+  animStartTime = performance.now();
+  showBanner('🛡️ Guardando a espada na cintura...');
+};
+
+$('equipShieldBtn').onclick = () => {
+  if (charState !== 'IDLE') return;
+  charState = 'ANIMATING';
+  animType = 'EQUIP_SHIELD';
+  animStartTime = performance.now();
+  showBanner('🛡️ Pegando o escudo nas costas...');
+};
+
+$('unequipShieldBtn').onclick = () => {
+  if (charState !== 'IDLE') return;
+  charState = 'ANIMATING';
+  animType = 'UNEQUIP_SHIELD';
+  animStartTime = performance.now();
+  showBanner('❌ Colocando o escudo de volta nas costas...');
+};
+
+$('lightAtkBtn').onclick = () => {
+  if (charState !== 'IDLE' || !handSword.visible) return;
+  charState = 'ANIMATING';
+  animType = 'ATTACK_LIGHT';
+  animStartTime = performance.now();
+  showBanner('🎯 Estocada Azul Cristalina!');
+};
+
+$('heavyAtkBtn').onclick = () => {
+  if (charState !== 'IDLE' || !handSword.visible) return;
+  charState = 'ANIMATING';
+  animType = 'ATTACK_HEAVY';
+  animStartTime = performance.now();
+  showBanner('💥 Corte Pesado com Efeito Azul!');
+};
+
+let yaw=0.5, pit=0.2, dist=4.8, spin=true;
+const tgt=new T.Vector3(0, 1.1, 0), ptr=new Map();
+
+function cam(){
+  C.position.set(
+    tgt.x + Math.sin(yaw) * Math.cos(pit) * dist,
+    tgt.y + Math.sin(pit) * dist,
+    tgt.z + Math.cos(yaw) * Math.cos(pit) * dist
+  );
+  C.lookAt(tgt);
+}
+
+stage.addEventListener('pointerdown', e => { stage.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]); });
+stage.addEventListener('pointermove', e => {
+  if(!ptr.has(e.pointerId)) return;
+  const o = ptr.get(e.pointerId);
+  yaw -= (e.clientX - o[0]) * 0.008;
+  pit = Math.min(1.2, Math.max(-0.1, pit + (e.clientY - o[1]) * 0.006));
+  ptr.set(e.pointerId, [e.clientX, e.clientY]);
+});
+const up = e => ptr.delete(e.pointerId);
+stage.addEventListener('pointerup', up);
+stage.addEventListener('pointercancel', up);
+stage.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(12, Math.max(2, dist * (1 + e.deltaY * 0.001))) }, { passive: false });
+
+$('zoom').onclick = () => { dist = dist > 3.5 ? 2.8 : 5.5; };
+$('spin').onclick = e => { spin = !spin; e.currentTarget.setAttribute('aria-pressed', spin); };
+
+function size(){
+  const w = stage.clientWidth, h = stage.clientHeight;
+  R.setSize(w, h, false);
+  C.aspect = w / h;
+  C.updateProjectionMatrix();
+}
+addEventListener('resize', size);
+size();
+
+R.setAnimationLoop(now => {
+  const t = now / 1000;
+  
+  if(charState === 'ANIMATING'){
+    const elapsed = (now - animStartTime) / 1000;
+    
+    if(animType === 'EQUIP_SWORD'){
+      if(elapsed < 0.35){
+        const p = elapsed / 0.35;
+        shR.rotation.x = 0.8 * p;
+        shR.rotation.z = -0.6 * p;
+        elR.rotation.x = -1.4 * p;
+        torso.rotation.y = -0.5 * p;
+      } else if(elapsed >= 0.35 && elapsed < 0.42){
+        waistSword.visible = false;
+        handSword.visible = true;
+      } else if(elapsed < 0.9){
+        const p = (elapsed - 0.42) / 0.48;
+        shR.rotation.x = 0.8 - p * 1.0;
+        shR.rotation.z = -0.6 + p * 0.8;
+        elR.rotation.x = -1.4 + p * 0.6;
+        torso.rotation.y = -0.5 + p * 0.5;
+      } else {
+        shR.rotation.set(-0.2, 0, 0.2);
+        elR.rotation.x = -0.8;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+        $('equipSwordBtn').disabled = true;
+        $('unequipSwordBtn').disabled = false;
+        $('lightAtkBtn').disabled = false;
+        $('heavyAtkBtn').disabled = false;
+      }
+    } else if(animType === 'UNEQUIP_SWORD'){
+      if(elapsed < 0.35){
+        const p = elapsed / 0.35;
+        shR.rotation.x = -0.2 + p * 1.0;
+        elR.rotation.x = -0.8 - p * 0.6;
+        torso.rotation.y = -0.5 * p;
+      } else if(elapsed >= 0.35 && elapsed < 0.42){
+        handSword.visible = false;
+        waistSword.visible = true;
+      } else if(elapsed < 0.85){
+        const p = (elapsed - 0.42) / 0.43;
+        shR.rotation.x = 0.8 - p * 1.0;
+        shR.rotation.z = -0.6 + p * 0.8;
+        elR.rotation.x = -1.4 + p * 1.1;
+        torso.rotation.y = -0.5 + p * 0.5;
+      } else {
+        shR.rotation.set(-0.2, 0, 0.2);
+        elR.rotation.x = -0.3;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+        $('equipSwordBtn').disabled = false;
+        $('unequipSwordBtn').disabled = true;
+        $('lightAtkBtn').disabled = true;
+        $('heavyAtkBtn').disabled = true;
+      }
+    } else if(animType === 'EQUIP_SHIELD'){
+      if(elapsed < 0.35){
+        const p = elapsed / 0.35;
+        shL.rotation.x = 0.9 * p;
+        shL.rotation.z = 0.6 * p;
+        elL.rotation.x = -1.5 * p;
+        torso.rotation.y = 0.4 * p;
+      } else if(elapsed >= 0.35 && elapsed < 0.42){
+        backShield.visible = false;
+        handShield.visible = true;
+      } else if(elapsed < 0.9){
+        const p = (elapsed - 0.42) / 0.48;
+        shL.rotation.x = 0.9 - p * 1.2;
+        shL.rotation.z = 0.6 - p * 0.8;
+        elL.rotation.x = -1.5 + p * 0.9;
+        torso.rotation.y = 0.4 - p * 0.4;
+      } else {
+        shL.rotation.set(-0.3, 0, -0.2);
+        elL.rotation.x = -0.6;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+        $('equipShieldBtn').disabled = true;
+        $('unequipShieldBtn').disabled = false;
+      }
+    } else if(animType === 'UNEQUIP_SHIELD'){
+      if(elapsed < 0.35){
+        const p = elapsed / 0.35;
+        shL.rotation.x = -0.3 + p * 1.2;
+        shL.rotation.z = -0.2 + p * 0.8;
+        elL.rotation.x = -0.6 - p * 0.9;
+        torso.rotation.y = 0.4 * p;
+      } else if(elapsed >= 0.35 && elapsed < 0.42){
+        handShield.visible = false;
+        backShield.visible = true;
+      } else if(elapsed < 0.85){
+        const p = (elapsed - 0.42) / 0.43;
+        shL.rotation.x = 0.9 - p * 1.2;
+        shL.rotation.z = 0.6 - p * 0.8;
+        elL.rotation.x = -1.5 + p * 0.9;
+        torso.rotation.y = 0.4 - p * 0.4;
+      } else {
+        shL.rotation.set(-0.3, 0, -0.2);
+        elL.rotation.x = -0.6;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+        $('equipShieldBtn').disabled = false;
+        $('unequipShieldBtn').disabled = true;
+      }
+    } else if(animType === 'ATTACK_LIGHT'){
+      if(elapsed < 0.45){
+        const progress = elapsed / 0.45;
+        const thrust = Math.sin(progress * Math.PI);
+        knight.position.z = -thrust * 1.2;
+        shR.rotation.x = -1.55 * thrust;
+        elR.rotation.x = -0.1 * thrust;
+        torso.rotation.y = thrust * 0.3;
+      } else {
+        knight.position.z = 0;
+        shR.rotation.set(-0.2, 0, 0.2);
+        elR.rotation.x = -0.8;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+      }
+    } else if(animType === 'ATTACK_HEAVY'){
+      if(elapsed < 0.7){
+        const progress = elapsed / 0.7;
+        if(progress < 0.35){
+          const load = progress / 0.35;
+          shR.rotation.x = 0.5 * load;
+          shR.rotation.z = -0.4 * load;
+          torso.rotation.y = -0.8 * load;
+          knight.position.z = load * 0.4;
+        } else {
+          const strike = (progress - 0.35) / 0.65;
+          const motion = Math.sin(strike * Math.PI);
+          shR.rotation.x = -1.8 * motion;
+          shR.rotation.z = 0.2;
+          torso.rotation.y = 1.2 * motion;
+          knight.position.z = -motion * 1.5;
+        }
+      } else {
+        knight.position.z = 0;
+        shR.rotation.set(-0.2, 0, 0.2);
+        elR.rotation.x = -0.8;
+        torso.rotation.y = 0;
+        charState = 'IDLE';
+      }
+    }
+  } else {
+    shR.rotation.x = -0.2 + Math.sin(t*2)*0.03;
+    torso.position.y = Math.sin(t*2)*0.01;
+  }
+  
+  if(spin && !ptr.size) yaw += 0.003;
+  
+  cam();
+  R.render(S,C);
+});
+})();
+</script>
+</body>
+</html>

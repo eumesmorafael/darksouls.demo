@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Requiem – Dragão Boss com IA e Padrão de Movimento</title>
+<style>
+:root {
+  --bg: #110e0c;
+  --fg: #e9dfc8;
+  --ac: #d4a24c;
+  --ln: #3b3328;
+  --danger: #ff3333;
+  --warning: #ffaa00;
+}
+* { box-sizing: border-box; user-select: none; }
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Georgia, serif;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+header {
+  padding: 10px 16px;
+  background: #1a1512;
+  border-bottom: 1px solid var(--ln);
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+.header-titles h1 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ac);
+  letter-spacing: 1px;
+}
+.header-titles p {
+  margin: 2px 0 0 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+.hud-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.threat-indicator {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 0.85rem;
+  background: #2a221a;
+  border: 1px solid var(--ln);
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+.threat-indicator.patrol { color: #8a8075; border-color: #3b3328; }
+.threat-indicator.telegraph { 
+  color: #fff; 
+  background: var(--warning); 
+  border-color: #ffcc00;
+  animation: pulse-warn 0.5s infinite alternate;
+  box-shadow: 0 0 12px rgba(255,170,0,0.5);
+}
+.threat-indicator.attacking { 
+  color: #fff; 
+  background: var(--danger); 
+  border-color: #ff6666;
+  box-shadow: 0 0 15px rgba(255,51,51,0.7);
+}
+
+@keyframes pulse-warn {
+  from { transform: scale(1); opacity: 0.85; }
+  to { transform: scale(1.05); opacity: 1; }
+}
+
+#stage {
+  flex: 1;
+  position: relative;
+  touch-action: none;
+  width: 100%;
+  height: 100%;
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#bossBanner {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(26, 21, 18, 0.92);
+  border: 1px solid var(--ac);
+  padding: 10px 24px;
+  border-radius: 25px;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: bold;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+}
+#bossBanner.active {
+  opacity: 1;
+  transform: translateX(-50%) translateY(8px);
+}
+
+footer {
+  padding: 10px 16px;
+  background: #1a1512;
+  border-top: 1px solid var(--ln);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  z-index: 10;
+  justify-content: center;
+}
+button {
+  flex: 1 1 150px;
+  max-width: 220px;
+  padding: 10px 14px;
+  background: var(--ac);
+  color: #15120f;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+button:hover {
+  background: #e5b35c;
+  transform: translateY(-1px);
+}
+button:active {
+  transform: translateY(0);
+}
+.btn-sub {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  font-weight: normal;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-titles">
+    <h1>Requiem – Dragão Boss com IA e Padrão de Movimento</h1>
+    <p>O dragão se movimenta, vigia a arena e realiza ataques telegrafados automaticamente!</p>
+  </div>
+  <div class="hud-status">
+    <div id="threatStatus" class="threat-indicator patrol">Ação: Patrulhando</div>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="bossBanner">O Dragão observa a arena...</div>
+</main>
+
+<footer>
+  <button id="toggleAI">
+    <span id="aiBtnText">⏸️ Pausar IA Automática</span>
+    <span class="btn-sub">Alternar combate autônomo</span>
+  </button>
+  <button id="forceFire">
+    <span>🔥 Forçar Sopro de Fogo</span>
+    <span class="btn-sub">Gera telegrafo imediato</span>
+  </button>
+  <button id="forceLightning">
+    <span>⚡ Forçar Raios</span>
+    <span class="btn-sub">Ataque de área imediato</span>
+  </button>
+  <button id="spin">
+    <span>🔄 Câmera Lenta</span>
+  </button>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function() {
+  function init() {
+    const stage = document.getElementById('stage');
+    if(!stage) return;
+
+    const bossBanner = document.getElementById('bossBanner');
+    const threatStatus = document.getElementById('threatStatus');
+
+    function showBanner(text, duration = 2200) {
+      bossBanner.textContent = text;
+      bossBanner.classList.add('active');
+      setTimeout(() => { bossBanner.classList.remove('active'); }, duration);
+    }
+
+    function setThreatState(stateClass, text) {
+      threatStatus.className = 'threat-indicator ' + stateClass;
+      threatStatus.textContent = text;
+    }
+
+    const T = THREE;
+    const R = new T.WebGLRenderer({ antialias: true });
+    R.setSize(stage.clientWidth || window.innerWidth, stage.clientHeight || window.innerHeight);
+    R.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    stage.appendChild(R.domElement);
+
+    const S = new T.Scene();
+    S.background = new T.Color(0x110e0c);
+    S.fog = new T.Fog(0x110e0c, 18, 55);
+
+    const C = new T.PerspectiveCamera(42, (stage.clientWidth || window.innerWidth) / (stage.clientHeight || window.innerHeight), 0.1, 200);
+
+    S.add(new T.HemisphereLight(0xffb0a0, 0x201515, 0.9));
+    const sun = new T.DirectionalLight(0xff7050, 1.4);
+    sun.position.set(5, 12, 6);
+    S.add(sun);
+
+    const floor = new T.Mesh(
+      new T.CircleGeometry(18, 48),
+      new T.MeshStandardMaterial({ color: 0x221a17, roughness: 1 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    S.add(floor);
+
+    // --- MARCADORES DE TELEGRAFO NO CHÃO ---
+    const coneTelegraphGeo = new T.RingGeometry(0.5, 12, 32, 1, 0, Math.PI / 2.6);
+    const coneTelegraphMat = new T.MeshBasicMaterial({ color: 0xff2200, transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false });
+    const coneTelegraph = new T.Mesh(coneTelegraphGeo, coneTelegraphMat);
+    coneTelegraph.rotation.x = -Math.PI / 2;
+    coneTelegraph.position.set(0, 0.03, 0);
+    S.add(coneTelegraph);
+
+    const circleTelegraphs = [];
+    for(let i = 0; i < 5; i++) {
+      const cMesh = new T.Mesh(
+        new T.RingGeometry(0.2, 2.5, 32),
+        new T.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false })
+      );
+      cMesh.rotation.x = -Math.PI / 2;
+      cMesh.position.y = 0.03;
+      cMesh.visible = false;
+      S.add(cMesh);
+      circleTelegraphs.push(cMesh);
+    }
+
+    // --- MODELO ORIGINAL DO DRAGÃO ---
+    const M = (c, m=0.3, r=0.6, f=true) => new T.MeshStandardMaterial({color:c, metalness:m, roughness:r, flatShading:f});
+    const sc = M(0x8f7566, 0.15, 0.85), sc2 = M(0x6e574b, 0.15, 0.9), bn = M(0xe4d8c4, 0.1, 0.7);
+    const bellyMat = M(0xd1bfa7, 0.1, 0.75);
+    const toothMat = M(0xf0efe6, 0.2, 0.4);
+    const eye = new T.MeshStandardMaterial({color: 0xff3030, roughness: 0.4, emissive: 0xff0000});
+    const wm = new T.MeshStandardMaterial({color: 0x5b3a26, side: T.DoubleSide, flatShading: true, roughness: 0.9});
+    const wb = M(0x3a2a1e, 0.1, 0.9);
+
+    const dragon = new T.Group();
+    S.add(dragon);
+
+    const c8 = (p,rt,rb,h,m,x=0,y=0,z=0) => { const o = new T.Mesh(new T.CylinderGeometry(rt,rb,h,8),m); o.position.set(x,y,z); p.add(o); return o; };
+    const s8 = (p,r,m,x=0,y=0,z=0,sx=1,sy=1,sz=1) => { const o = new T.Mesh(new T.SphereGeometry(r,8,6),m); o.position.set(x,y,z); o.scale.set(sx,sy,sz); p.add(o); return o; };
+    const K = (p,r,h,m,x,y,z,rx=0,rz=0) => { const o = new T.Mesh(new T.ConeGeometry(r,h,8),m); o.position.set(x,y,z); o.rotation.set(rx,0,rz); p.add(o); return o; };
+    const bone = (p,a,b,r,m) => { const d=new T.Vector3().subVectors(b,a),o=new T.Mesh(new T.CylinderGeometry(r*.6,r,d.length(),8),m); o.position.copy(a).addScaledVector(d,.5); o.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.normalize()); p.add(o); };
+    const P = (p,x=0,y=0,z=0) => { const g=new T.Group(); g.position.set(x,y,z); p.add(g); return g; };
+    const B = (p,w,h,d,m,x=0,y=0,z=0) => { const o=new T.Mesh(new T.BoxGeometry(w,h,d),m); o.position.set(x,y,z); p.add(o); return o; };
+
+    s8(dragon, 1.1, sc, 0, 1.8, 0, 0.95, 0.9, 1.75);
+    for(let i = 0; i < 7; i++){
+      const zPos = 1.1 - i * 0.35;
+      const width = 0.85 - Math.abs(i - 3) * 0.08;
+      B(dragon, width, 0.12, 0.28, bellyMat, 0, 1.05 - (i * 0.02), zPos);
+    }
+
+    const nk = [], tl = [], NN = 7, TN = 16, FW = new T.Vector3();
+    for(let i=0; i<NN; i++){ const m = new T.Mesh(new T.DodecahedronGeometry(1,0), sc); dragon.add(m); nk.push(m); K(m, .3, .8, bn, 0, .9, -.3, -.5); }
+    for(let i=0; i<TN; i++){ const m = new T.Mesh(new T.DodecahedronGeometry(1,0), i%2?sc:sc2); dragon.add(m); tl.push(m); if(i%2===0) K(m, .25, .7, bn, 0, .9, 0); }
+    for(let i=0; i<6; i++) K(dragon, .2, .7, bn, 0, 2.7, 1.2 - i*.48);
+
+    const dh = P(dragon), jaw = P(dh, 0, -.28, .1);
+    B(dh, .85, .58, 1.1, sc, 0, .05, 0); 
+    B(dh, .52, .35, 1.1, sc, 0, -.02, .8);
+    B(dh, .3, .2, .5, sc2, 0, .12, 1.05);
+    B(jaw, .5, .15, 1.3, sc2, 0, -.02, .7);
+
+    for(const s of [-1,1]){
+      K(dh, .16, 1.8, bn, s*.34, .55, -.5, -1.2, s*.25);
+      B(dh, .12, .1, .1, eye, s*.44, .16, .35);
+      B(dh, .2, .08, .3, sc2, s*.38, .24, .35);
+      K(dh, .04, .18, sc2, s*.15, .12, 1.3, Math.PI/2, 0);
+    }
+
+    const upperTeeth = [
+      {x: -.2, z: 1.28, r: .05, h: .22}, {x: .2, z: 1.28, r: .05, h: .22},
+      {x: -.22, z: 1.05, r: .04, h: .18}, {x: .22, z: 1.05, r: .04, h: .18},
+      {x: 0, z: 1.3, r: .035, h: .15}
+    ];
+    upperTeeth.forEach(t => { K(dh, t.r, t.h, toothMat, t.x, -.18, t.z, Math.PI, 0); });
+
+    const hindLegGroups = [];
+    for(const [x,z] of [[-.52,-.6],[.52,-.6]]){
+      const sg = Math.sign(x), h = P(dragon, x, 1.3, z);
+      c8(h, .24, .16, .75, sc, 0, -.35, 0);
+      const k = P(h, 0, -.7, 0); s8(k, .16, sc2);
+      c8(k, .14, .1, .65, sc, 0, -.3, 0);
+      const ft = P(k, 0, -.6, 0);
+      B(ft, .35, .16, .58, sc2, 0, -.05, .15); 
+      for(let c=-1; c<=1; c++) K(ft, .07, .3, bn, c*.12, -.1, .4, 1.57);
+      h.rotation.z = sg*.15; k.rotation.z = -sg*.15;
+      hindLegGroups.push({h, k});
+    }
+
+    const leftArmH = P(dragon, -.52, 1.3, .85);
+    c8(leftArmH, .22, .14, .7, sc, 0, -.35, 0);
+    const leftArmK = P(leftArmH, 0, -.7, 0); s8(leftArmK, .15, sc2);
+    c8(leftArmK, .13, .1, .6, sc, 0, -.3, 0);
+
+    const armH = P(dragon, .52, 1.3, .85);
+    c8(armH, .22, .14, .7, sc, 0, -.35, 0);
+    const armK = P(armH, 0, -.7, 0); s8(armK, .15, sc2);
+    c8(armK, .13, .1, .6, sc, 0, -.3, 0);
+
+    function wing(side){
+      const g = new T.Group();
+      const wBase = new T.Vector3(0, 0, 0);
+      const wElbow = new T.Vector3(2.2, 1.6, -0.4);
+      const wTip = new T.Vector3(5.8, 3.4, -1.2);
+      const f1 = new T.Vector3(5.4, 1.2, -2.4);
+      const f2 = new T.Vector3(4.2, -0.6, -3.2);
+      const f3 = new T.Vector3(2.0, -1.2, -2.8);
+      const wEnd = new T.Vector3(0.5, -0.5, -2.0);
+
+      const geo = new T.BufferGeometry().setFromPoints([
+        wBase, wElbow, wTip, wElbow, wTip, f1,
+        wElbow, f1, f2, wElbow, f2, f3,
+        wBase, wElbow, f3, wBase, f3, wEnd
+      ]);
+      geo.computeVertexNormals();
+
+      const wingMembrane = new T.Mesh(geo, wm);
+      g.add(wingMembrane);
+
+      bone(g, wBase, wElbow, 0.16, wb);
+      bone(g, wElbow, wTip, 0.12, wb);
+      bone(g, wTip, f1, 0.06, wb);
+      bone(g, wElbow, f2, 0.05, wb);
+      bone(g, wElbow, f3, 0.05, wb);
+
+      K(g, 0.08, 0.35, bn, wTip.x, wTip.y, wTip.z, -0.5, 0);
+      g.scale.x = side;
+      dragon.add(g);
+      return g;
+    }
+    const wR = wing(1), wL = wing(-1);
+
+    const throatGlowLight = new T.PointLight(0xff5500, 0, 6);
+    dh.add(throatGlowLight);
+    throatGlowLight.position.set(0, -0.1, 0.5);
+
+    const fireStreamGeo = new T.DodecahedronGeometry(1, 1);
+    const streamCoreMat = new T.MeshBasicMaterial({ color: 0xfff0aa, transparent: true, opacity: 0.95 });
+    const streamMidMat = new T.MeshStandardMaterial({ color: 0xff5500, emissive: 0xff2200, emissiveIntensity: 2.0, transparent: true, opacity: 0.85 });
+    const streamOuterMat = new T.MeshStandardMaterial({ color: 0xff1100, emissive: 0x880000, emissiveIntensity: 1.2, transparent: true, opacity: 0.6 });
+
+    const fireStream = [];
+    const fireMuzzle = new T.Vector3(0, -0.12, 1.25);
+
+    function launchFireStreamChunk(){
+      const chunk = new T.Group();
+      chunk.add(new T.Mesh(fireStreamGeo, streamCoreMat));
+      const mid = new T.Mesh(fireStreamGeo, streamMidMat); mid.scale.setScalar(0.75); chunk.add(mid);
+      const outer = new T.Mesh(fireStreamGeo, streamOuterMat); outer.scale.setScalar(1.1); chunk.add(outer);
+
+      const spawnPos = dh.localToWorld(fireMuzzle.clone());
+      chunk.position.copy(spawnPos);
+
+      const direction = new T.Vector3(0, -0.1, 1).applyAxisAngle(new T.Vector3(0, 1, 0), dragon.rotation.y).normalize();
+      direction.x += (Math.random() - 0.5) * 0.12;
+      direction.z += (Math.random() - 0.5) * 0.12;
+
+      chunk.quaternion.setFromUnitVectors(new T.Vector3(0, 0, 1), direction);
+      S.add(chunk);
+
+      fireStream.push({ group: chunk, outer, mid, direction, age: 0, maxAge: 0.85 });
+    }
+
+    const bodyLightning = new T.LineSegments(
+      new T.BufferGeometry(),
+      new T.LineBasicMaterial({ color: 0xffaa00, linewidth: 2, transparent: true, opacity: 0.9 })
+    );
+    dragon.add(bodyLightning);
+    bodyLightning.visible = false;
+
+    function generateBodyLightning() {
+      const pts = [];
+      const rnd = Math.random;
+      for (let i = 0; i < 14; i++) {
+        let startNode = (i < 5) ? nk[Math.floor(rnd() * nk.length)].position : dh.position;
+        let px = startNode.x + (rnd() - 0.5) * 0.8;
+        let py = startNode.y + (rnd() - 0.5) * 0.8;
+        let pz = startNode.z + (rnd() - 0.5) * 0.8;
+
+        for (let j = 0; j < 3; j++) {
+          const nxtX = px + (rnd() - 0.5) * 0.7;
+          const nxtY = py + (rnd() - 0.5) * 0.7;
+          const nxtZ = pz + (rnd() - 0.5) * 0.7;
+          pts.push(px, py, pz, nxtX, nxtY, nxtZ);
+          px = nxtX; py = nxtY; pz = nxtZ;
+        }
+      }
+      bodyLightning.geometry.setAttribute('position', new T.Float32BufferAttribute(pts, 3));
+    }
+
+    const arenaLightningGroup = new T.Group();
+    S.add(arenaLightningGroup);
+    const arenaLightning = new T.LineSegments(
+      new T.BufferGeometry(),
+      new T.LineBasicMaterial({ color: 0xff3333, linewidth: 3, transparent: true, opacity: 1 })
+    );
+    arenaLightningGroup.add(arenaLightning);
+
+    function generateArenaLightning(targets) {
+      const pts = [];
+      const rnd = Math.random;
+      targets.forEach(pos => {
+        let px = pos.x, pz = pos.z, py = 12;
+        for(let j=0; j<10; j++) {
+          const nxtY = py - 1.2;
+          const nxtX = px + (rnd() - 0.5) * 0.8;
+          const nxtZ = pz + (rnd() - 0.5) * 0.8;
+          pts.push(px, py, pz, nxtX, nxtY, nxtZ);
+          px = nxtX; py = nxtY; pz = nxtZ;
+        }
+      });
+      arenaLightning.geometry.setAttribute('position', new T.Float32BufferAttribute(pts, 3));
+    }
+
+    let yaw = 0.6, pit = 0.25, dist = 14;
+    const tgt = new T.Vector3(0, 1.5, 0);
+    const ptr = new Map();
+
+    function updateCam(){
+      C.position.set(
+        tgt.x + Math.sin(yaw) * Math.cos(pit) * dist,
+        tgt.y + Math.sin(pit) * dist,
+        tgt.z + Math.cos(yaw) * Math.cos(pit) * dist
+      );
+      C.lookAt(tgt);
+    }
+
+    stage.addEventListener('pointerdown', e => { stage.setPointerCapture(e.pointerId); ptr.set(e.pointerId, [e.clientX, e.clientY]); });
+    stage.addEventListener('pointermove', e => {
+      if(!ptr.has(e.pointerId)) return;
+      const o = ptr.get(e.pointerId);
+      yaw -= (e.clientX - o[0]) * 0.008;
+      pit = Math.min(1.3, Math.max(-0.1, pit + (e.clientY - o[1]) * 0.006));
+      ptr.set(e.pointerId, [e.clientX, e.clientY]);
+    });
+    const clearPtr = e => ptr.delete(e.pointerId);
+    stage.addEventListener('pointerup', clearPtr);
+    stage.addEventListener('pointercancel', clearPtr);
+
+    let spin = true;
+    document.getElementById('spin').onclick = () => { spin = !spin; };
+
+    let aiEnabled = true;
+    let bossState = 'WALKING';
+    let stateTimer = 0;
+    let targetPos = new T.Vector3(0, 0, 0);
+    let lightningTargets = [];
+    let nextFireParticle = 0;
+
+    function getNewTargetPos() {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 3 + Math.random() * 7;
+      return new T.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+    }
+
+    document.getElementById('toggleAI').onclick = () => {
+      aiEnabled = !aiEnabled;
+      document.getElementById('aiBtnText').textContent = aiEnabled ? '⏸️ Pausar IA Automática' : '▶️ Ativar IA Automática';
+      if(!aiEnabled) {
+        bossState = 'IDLE';
+        setThreatState('patrol', 'IA Pausada');
+      }
+    };
+
+    document.getElementById('forceFire').onclick = () => { triggerFireAttack(); };
+    document.getElementById('forceLightning').onclick = () => { triggerLightningAttack(); };
+
+    function triggerFireAttack() {
+      bossState = 'TELEGRAPH_FIRE';
+      stateTimer = 1.3;
+      showBanner('🔥 SOPRO DE FOGO CARREGANDO! (DESVIE DO CONE)');
+      setThreatState('telegraph', 'Sinalizador: Sopro');
+    }
+
+    function triggerLightningAttack() {
+      bossState = 'TELEGRAPH_LIGHTNING';
+      stateTimer = 1.5;
+
+      lightningTargets = [];
+      for(let i=0; i<4; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const d = 2.5 + Math.random() * 6.0;
+        lightningTargets.push(new T.Vector3(Math.cos(a)*d, 0, Math.sin(a)*d));
+      }
+
+      showBanner('⚡ RAIOS CARREGANDO! OBSERVE AS ÁREAS NO CHÃO');
+      setThreatState('telegraph', 'Sinalizador: Raios');
+    }
+
+    targetPos = getNewTargetPos();
+
+    window.addEventListener('resize', () => {
+      const w = stage.clientWidth || window.innerWidth, h = stage.clientHeight || window.innerHeight;
+      R.setSize(w, h);
+      C.aspect = w / h;
+      C.updateProjectionMatrix();
+    });
+
+    let previousFrameTime = 0;
+    R.setAnimationLoop((now) => {
+      const t = now / 1000;
+      const delta = previousFrameTime ? Math.min((now - previousFrameTime) / 1000, .05) : 0;
+      previousFrameTime = now;
+      const bob = Math.sin(t * 1.8) * 0.06;
+
+      coneTelegraphMat.opacity = 0;
+      circleTelegraphs.forEach(c => c.visible = false);
+      bodyLightning.visible = false;
+      arenaLightningGroup.visible = false;
+
+      if(aiEnabled) {
+        stateTimer -= delta;
+
+        if(stateTimer <= 0) {
+          if(bossState === 'WALKING' || bossState === 'IDLE') {
+            const nextAction = Math.random();
+            if(nextAction < 0.4) {
+              triggerFireAttack();
+            } else if(nextAction < 0.75) {
+              triggerLightningAttack();
+            } else {
+              bossState = 'FLYING';
+              stateTimer = 5.0;
+              showBanner('🐉 O DRAGÃO DECOLOU! BOMBARDEIO AÉREO');
+              setThreatState('attacking', 'Ataque Aéreo');
+            }
+          } else if(bossState === 'ATTACK_FIRE' || bossState === 'ATTACK_LIGHTNING' || bossState === 'FLYING') {
+            bossState = 'WALKING';
+            stateTimer = 2.5 + Math.random() * 2;
+            targetPos = getNewTargetPos();
+            showBanner('O Dragão está buscando posição...');
+            setThreatState('patrol', 'Ação: Reposicionando');
+          }
+        }
+      }
+
+      if(bossState === 'WALKING') {
+        const toTarget = targetPos.clone().sub(dragon.position);
+        toTarget.y = 0;
+
+        if(toTarget.length() > 0.5) {
+          const targetAngle = Math.atan2(toTarget.x, toTarget.z);
+          let diff = targetAngle - dragon.rotation.y;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          dragon.rotation.y += diff * 2.5 * delta;
+
+          dragon.position.addScaledVector(toTarget.normalize(), 2.2 * delta);
+
+          const legCycle = Math.sin(t * 6);
+          armH.rotation.x = legCycle * 0.3;
+          leftArmH.rotation.x = -legCycle * 0.3;
+        } else {
+          targetPos = getNewTargetPos();
+        }
+      } else if(bossState === 'FLYING') {
+        const speed = t * 1.2;
+        dragon.position.x = Math.sin(speed) * 6.5;
+        dragon.position.z = Math.cos(speed) * 6.5;
+        dragon.position.y = 3.2 + Math.sin(speed * 2) * 0.8;
+        dragon.rotation.y = speed + Math.PI / 2;
+        dragon.rotation.z = -0.2;
+
+        circleTelegraphs[0].visible = true;
+        circleTelegraphs[0].position.set(dragon.position.x, 0.03, dragon.position.z);
+        circleTelegraphs[0].material.opacity = 0.6;
+        circleTelegraphs[0].material.color.setHex(0xff3300);
+      } else {
+        dragon.position.y = 0;
+        dragon.rotation.z = 0;
+        armH.rotation.x = 0;
+        leftArmH.rotation.x = 0;
+      }
+
+      if(bossState === 'TELEGRAPH_FIRE') {
+        const progress = 1.0 - (stateTimer / 1.3);
+        dragon.rotation.x = -progress * 0.3;
+        jaw.rotation.x = 0.2 + progress * 0.4;
+        throatGlowLight.intensity = progress * 8.0;
+
+        coneTelegraph.position.copy(dragon.position);
+        coneTelegraph.position.y = 0.03;
+        coneTelegraph.rotation.z = -dragon.rotation.y - Math.PI / 2 - Math.PI / 5.2;
+        coneTelegraphMat.opacity = 0.3 + Math.sin(progress * 22) * 0.3;
+
+        if(stateTimer <= 0) {
+          bossState = 'ATTACK_FIRE';
+          stateTimer = 2.2;
+          setThreatState('attacking', '🔥 SOPRO ATIVO!');
+        }
+      } else if(bossState === 'ATTACK_FIRE') {
+        dragon.rotation.x = 0.1;
+        jaw.rotation.x = 0.65;
+        throatGlowLight.intensity = 6.0;
+
+        if(t >= nextFireParticle) {
+          launchFireStreamChunk();
+          nextFireParticle = t + 0.04;
+        }
+      } else if(bossState === 'TELEGRAPH_LIGHTNING') {
+        const progress = 1.0 - (stateTimer / 1.5);
+        armH.rotation.x = -1.1 * Math.sin(progress * Math.PI);
+
+        bodyLightning.visible = true;
+        generateBodyLightning();
+
+        lightningTargets.forEach((pos, idx) => {
+          if (idx < circleTelegraphs.length) {
+            const c = circleTelegraphs[idx];
+            c.visible = true;
+            c.position.copy(pos);
+            c.material.opacity = 0.3 + Math.sin(t * 15 + idx) * 0.3;
+          }
+        });
+
+        if(stateTimer <= 0) {
+          bossState = 'ATTACK_LIGHTNING';
+          stateTimer = 2.0;
+          setThreatState('attacking', '⚡ IMPACTO DOS RAIOS!');
+        }
+      } else if(bossState === 'ATTACK_LIGHTNING') {
+        armH.rotation.x = 0.2;
+        bodyLightning.visible = true;
+        generateBodyLightning();
+
+        arenaLightningGroup.visible = true;
+        generateArenaLightning(lightningTargets);
+
+        lightningTargets.forEach((pos, idx) => {
+          if (idx < circleTelegraphs.length) {
+            const c = circleTelegraphs[idx];
+            c.visible = true;
+            c.position.copy(pos);
+            c.material.color.setHex(0xff3333);
+            c.material.opacity = 0.9;
+          }
+        });
+      } else {
+        throatGlowLight.intensity = 0;
+        jaw.rotation.x = 0.12;
+        dragon.rotation.x = 0;
+      }
+
+      const pn = [];
+      for(let i=0; i<NN; i++){
+        const u = i / (NN - 1);
+        nk[i].position.set(0, 2.1 + u*1.3 + bob, 1.3 + u*1.7);
+        nk[i].scale.setScalar(.4 - .17*u);
+        pn.push(nk[i].position);
+      }
+      dh.position.copy(pn[NN-1]);
+      FW.set(0, pn[NN-1].y - 0.25, pn[NN-1].z + 1);
+      dh.lookAt(FW);
+
+      for(let i=0; i<TN; i++){
+        const u = i / TN;
+        tl[i].position.set(Math.sin(i*.28 - t*1.5)*(.1 + i*.07), 1.7 - i*.04 + u*u*1.5, -1.5 - i*.55);
+        tl[i].scale.setScalar(.45*(1-u)+.06);
+      }
+
+      const wingBeat = (bossState === 'FLYING') ? Math.sin(t * 8) * 0.55 : Math.sin(t * 1.8) * 0.22;
+      wR.position.set(0.65, 2.6 + bob, 0.1);
+      wL.position.set(-0.65, 2.6 + bob, 0.1);
+      wR.rotation.set(0.15 + wingBeat * 0.2, -wingBeat * 0.15, 0.15 + wingBeat);
+      wL.rotation.set(0.15 + wingBeat * 0.2, wingBeat * 0.15, -0.15 - wingBeat);
+
+      for(let i = fireStream.length - 1; i >= 0; i--){
+        const chunk = fireStream[i];
+        chunk.age += delta;
+        chunk.group.position.addScaledVector(chunk.direction, 16 * delta);
+
+        const progress = chunk.age / chunk.maxAge;
+        const expansion = 0.8 + progress * 2.8;
+        chunk.group.scale.set(expansion, expansion, expansion * 1.2);
+
+        chunk.outer.material.opacity = Math.max(0, 0.6 * (1 - progress));
+        chunk.mid.material.opacity = Math.max(0, 0.85 * (1 - progress));
+
+        if(progress >= 1.0){
+          S.remove(chunk.group);
+          fireStream.splice(i, 1);
+        }
+      }
+
+      if(spin && !ptr.size) yaw += 0.003;
+      updateCam();
+      R.render(S, C);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>
